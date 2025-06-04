@@ -17,14 +17,10 @@ javadoc {
 }
 tasks.withType(AbstractCompile) each { it.options.encoding = 'UTF-8' }
 
-ext {
-    mavenRepository = '..\\maven'
-}
-
 uploadArchives {
     repositories {
         mavenDeployer {
-            repository(url: uri(mavenRepository))
+            repository(url: uri("${System.getProperty('user.home')}/.m2/repository"))
         }
     }
 }

@@ -4,18 +4,29 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 
 import java.io.*;
-import java.math.BigInteger;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
 @SuppressWarnings("unchecked")
 public class Util {
     private static Gson gson;
+    private static final HttpClient client;
 
     static {
         gson = new Gson();
+        client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
     }
 
     public static String toJSON(Map<String, Object> json) {
@@ -159,40 +170,32 @@ public class Util {
         return null;
     }
 
-    public static String getPageContentWithJson(String url, String data, Map<String, String> header) throws IOException {
-        URL u = new URL(url);
-        HttpURLConnection connection = (HttpURLConnection) u.openConnection();
-        putRequestHeader(header);
-        header.put("Content-Type", "application/json");
-        header.put("Content-Length", String.valueOf(data.length()));
-        for (String key : header.keySet()) {
-            connection.setRequestProperty(key, header.get(key));
+    public static String getPageContentWithJson(String url, String data, Map<String, String> headers) throws IOException {
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .POST(HttpRequest.BodyPublishers.ofString(data))
+                .header("Content-Type", "application/json")
+                .header("User-Agent", YouTubeLiveChat.userAgent)
+                .header("Accept-Charset", "utf-8");
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            requestBuilder.header(entry.getKey(), entry.getValue());
         }
-        connection.setRequestMethod("POST");
-        connection.setDoOutput(true);
-        OutputStreamWriter writer = new OutputStreamWriter(connection.getOutputStream(), StandardCharsets.UTF_8);
-        writer.write(data);
-        writer.close();
-        connection.connect();
+
+        HttpRequest request = requestBuilder.build();
+
         try {
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) { // success
-                InputStream inputStream = connection.getInputStream();
-                byte[] buff = new byte[8192];
-                int len;
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                while ((len = inputStream.read(buff)) != -1) {
-                    baos.write(buff, 0, len);
-                }
-                inputStream.close();
-                String content = baos.toString(StandardCharsets.UTF_8.toString());
-                baos.close();
-                return content;
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            int statusCode = response.statusCode();
+
+            if (statusCode == 200) {
+                return response.body();
+            } else {
+                throw new IOException("HTTP request failed with status code: " + statusCode);
             }
-        } catch (IOException exception) {
-            throw new IOException("Error during http request ", exception);
+        } catch (IOException | InterruptedException e) {
+            throw new IOException("Error during HTTP request", e);
         }
-        return null;
     }
 
     public static void sendHttpRequestWithJson(String url, String data, Map<String, String> header) throws IOException {
