@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @SuppressWarnings("unchecked")
 public class Util {
@@ -185,7 +188,7 @@ public class Util {
         HttpRequest request = requestBuilder.build();
 
         try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).get(10, TimeUnit.SECONDS);
             int statusCode = response.statusCode();
 
             if (statusCode == 200) {
@@ -193,8 +196,13 @@ public class Util {
             } else {
                 throw new IOException("HTTP request failed with status code: " + statusCode);
             }
-        } catch (IOException | InterruptedException e) {
-            throw new IOException("Error during HTTP request", e);
+        } catch (TimeoutException e) {
+            throw new IOException("Timeout while waiting for HTTP response", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("HTTP request interrupted", e);
+        } catch (ExecutionException e) {
+            throw new IOException("Error during HTTP request", e.getCause());
         }
     }
 
